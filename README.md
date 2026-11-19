@@ -1,22 +1,33 @@
 # resume-matcher-api
 
-API REST en Spring Boot que califica una hoja de vida frente a la descripción de un cargo usando un LLM (Claude, vía la Messages API de Anthropic).
+API REST en Spring Boot que califica qué tan bien encaja una hoja de vida con la descripción de un cargo, usando un LLM (Claude, vía la Messages API de Anthropic).
 
 `POST /api/evaluations` recibe `{"jobDescription": "...", "resume": "..."}` y devuelve `{"score": 0-100, "explanation": "2 o 3 frases"}`.
 
 ## Cómo correrlo
 
-Requisitos: Java 21. Maven no hace falta (el proyecto trae el Maven wrapper).
+Requisitos: Java 21 y una clave de Anthropic. No hace falta instalar Maven (el proyecto trae el wrapper).
 
-```bash
-export ANTHROPIC_API_KEY="sk-ant-..."   # PowerShell: $env:ANTHROPIC_API_KEY = "sk-ant-..."
-./mvnw spring-boot:run                  # Windows: .\mvnw.cmd spring-boot:run
+**Windows (PowerShell):**
+
+```powershell
+$env:ANTHROPIC_API_KEY = "sk-ant-..."
+.\mvnw.cmd spring-boot:run
 ```
 
-Pruebas (no requieren clave ni red; el LLM se simula):
+**Linux / macOS:**
 
 ```bash
-./mvnw test
+export ANTHROPIC_API_KEY="sk-ant-..."
+./mvnw spring-boot:run
+```
+
+La API queda en `http://localhost:8080`. Opcional: `ANTHROPIC_MODEL` cambia el modelo (por defecto `claude-haiku-5-5`).
+
+**Pruebas** (no necesitan clave ni red; el LLM se simula):
+
+```bash
+./mvnw test        # Windows: .\mvnw.cmd test
 ```
 
 ## Ejemplo
@@ -25,60 +36,79 @@ Pruebas (no requieren clave ni red; el LLM se simula):
 curl -X POST http://localhost:8080/api/evaluations \
   -H "Content-Type: application/json" \
   -d '{
-        "jobDescription": "Desarrollador backend Java con Spring Boot, 3+ años, experiencia con APIs REST y MySQL.",
-        "resume": "Ingeniero de sistemas. 5 años desarrollando APIs REST con Java 17 y Spring Boot. Bases de datos MySQL y PostgreSQL."
+        "jobDescription": "Desarrollador backend Java. Requisitos: 3+ años con Java y Spring Boot, APIs REST y MySQL. Deseable: Docker y AWS.",
+        "resume": "Ingeniero de sistemas. 5 años desarrollando APIs REST con Java 17 y Spring Boot. Bases de datos MySQL y PostgreSQL. Despliegues con Docker."
       }'
 ```
 
-Respuesta (ilustrativa; el texto exacto lo genera el modelo):
+En PowerShell:
+
+```powershell
+$body = @{ jobDescription = "Desarrollador backend Java..."; resume = "Ingeniero de sistemas..." } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/evaluations -ContentType "application/json; charset=utf-8" -Body $body
+```
+
+<!-- TODO: reemplazar los dos ejemplos con respuestas reales -->
+Respuesta (**ilustrativa**):
 
 ```json
-{"score": 88, "explanation": "El candidato cumple y supera los años de experiencia requeridos con Java y Spring Boot. También tiene experiencia en APIs REST y MySQL, que son los requisitos centrales del cargo."}
+{"score": 88, "explanation": "El candidato cumple todos los requisitos obligatorios: más de 3 años con Java y Spring Boot, APIs REST y MySQL. Tiene experiencia con Docker, pero no muestra experiencia con AWS."}
 ```
+
+Con `?detail=true` se agrega el desglose que explica el puntaje (**ilustrativo**, recortado):
+
+```json
+{
+  "score": 88,
+  "explanation": "...",
+  "requirements": [
+    {"requirement": "3+ años con Java y Spring Boot", "type": "MUST", "met": true,
+     "evidence": "5 años desarrollando APIs REST con Java 17 y Spring Boot", "verified": true},
+    {"requirement": "AWS", "type": "NICE", "met": false, "evidence": null, "verified": true}
+  ]
+}
+```
+
+La carpeta [`postman/`](postman/resume-matcher.postman_collection.json) tiene una colección con el caso exitoso, el detalle, los errores 400 y una hoja de vida que no encaja (variable `{{baseUrl}}`).
+
+## Errores
 
 | Caso | Respuesta |
 |---|---|
-| Éxito | `200` con `score` y `explanation` |
-| Falta un campo, viene vacío o el JSON es inválido | `400` `{"error": "El campo 'resume' es obligatorio y no puede estar vacío"}` |
-| El LLM falla, rechaza la solicitud o responde algo inválido | `502` `{"error": "El servicio de evaluación no está disponible en este momento..."}` |
+| Éxito | `200` con `score` y `explanation` (y `requirements` si `?detail=true`) |
+| Falta un campo, viene vacío o supera 50.000 caracteres | `400` `{"error": "El campo 'resume' es obligatorio y no puede estar vacío"}` |
+| El cuerpo no es JSON válido o `detail` no es booleano | `400` `{"error": "..."}` |
+| El LLM falla, rechaza la solicitud, responde algo inválido o no extrae requisitos | `502` `{"error": "El servicio de evaluación no está disponible en este momento..."}` |
 
 ## Decisiones
 
-- **`LlmClient` como interfaz** (`complete(systemPrompt, userPrompt)`), con `AnthropicLlmClient` como implementación. El servicio no conoce al proveedor y en las pruebas se reemplaza con un mock.
-- **Sin SDK:** `RestClient` de Spring contra `POST /v1/messages`, con timeouts configurables. La clave se lee solo de `ANTHROPIC_API_KEY`. Nunca se registra en logs y `AnthropicProperties.toString()` la enmascara.
-- **Modelo `claude-opus-5-5` con `effort: medium`.** Ambos son configurables en `application.yml`. Se activa el respaldo del servidor (`fallbacks: "default"`): si el modelo rechaza la solicitud por un falso positivo, Anthropic reintenta con otro modelo.
-- **Prompt:**
-  - Las instrucciones van en el `system` y los textos del usuario en el mensaje, delimitados con `<job_description>` y `<resume>`.
-  - El modelo debe ignorar cualquier instrucción que venga dentro de esos textos y responder solo JSON.
-  - Antes de enviarlos se escapan `<` y `>` en los textos, para que nadie pueda cerrar la etiqueta e inyectar instrucciones fuera de ella.
-- **Parseo:**
-  - Tolera texto o bloques de código alrededor del JSON: toma del primer `{` al último `}`.
-  - Exige que `score` sea numérico y `explanation` un texto no vacío. Si no, responde 502.
-  - El `score` se redondea y se ajusta al rango 0–100 en lugar de rechazarlo.
-- **Errores:**
-  - Un `@RestControllerAdvice` da un formato único, `{"error": ...}`.
-  - El detalle de un fallo del LLM queda solo en el log del servidor; al cliente nunca le llegan la clave, códigos ni mensajes del proveedor.
-  - Los errores propios de Spring (404, 405, 415) conservan su código.
-- **Límite de 50.000 caracteres por campo,** para no enviar textos gigantes al modelo (costo y contexto).
-- **Pruebas:**
-  - `@WebMvcTest` con `LlmClient` simulado: éxito, falta `resume`, `jobDescription` vacío, JSON inválido, LLM que falla y LLM que responde basura.
-  - Pruebas unitarias del parseo y del escape del prompt.
-  - Una prueba de arranque del contexto completo.
+- **El LLM extrae; Java calcula.** El modelo no inventa el número: lista los requisitos del cargo, los clasifica en obligatorios (`MUST`) o deseables (`NICE`) y cita la frase de la hoja de vida que demuestra cada uno. `ScoreCalculator` calcula `75 × MUST cumplidos/total + 25 × NICE cumplidos/total` (o `100 × cumplidos/total` si solo hay un tipo). Así el puntaje es:
+  - **Reproducible:** los mismos requisitos dan siempre el mismo número.
+  - **Auditable:** `?detail=true` muestra de dónde sale cada punto.
+  - **Comprobable sin LLM:** la fórmula tiene pruebas unitarias propias.
+- **Verificación de citas contra alucinaciones.** `EvidenceVerifier` comprueba que cada cita exista en la hoja de vida, sin distinguir espacios, saltos de línea ni mayúsculas. Si el modelo cita algo que no está, o da un requisito por cumplido sin cita, ese requisito cuenta como no cumplido y queda marcado `verified: false`.
+- **Contrato mínimo por defecto.** La respuesta es exactamente `{score, explanation}`, como pide el enunciado. El desglose es opcional (`?detail=true`, `@JsonInclude(NON_NULL)`).
+- **`LlmClient` como interfaz.** `AnthropicLlmClient` es una implementación. Cambiar de proveedor no toca el servicio, y en las pruebas el modelo se simula. No se usa SDK: `RestClient` de Spring contra `POST /v1/messages`, con timeouts configurables.
+- **Claude Haiku 5.5 por costo y latencia.** Extraer y citar es una tarea acotada, no necesita el modelo más grande. Va con `effort: low`, razonamiento desactivado (no consume `max_tokens`) y `max_tokens: 1500`. El modelo se cambia con `ANTHROPIC_MODEL`.
+- **Sin `temperature: 0`.** La versión de la API que se usa (`2026-10-21`) rechaza los parámetros de muestreo. La consistencia no depende de la temperatura sino del diseño: el modelo solo extrae, y el número lo calcula Java.
+- **Protección de la clave.**
+  - Se lee solo de `ANTHROPIC_API_KEY`.
+  - Nunca se registra en logs y `AnthropicProperties.toString()` la enmascara.
+  - Ante un fallo del proveedor, el cliente de la API recibe un mensaje genérico, sin códigos ni detalles de Anthropic.
+- **Protección contra prompt injection.**
+  - Las instrucciones van en el `system`. Los textos del usuario van en el mensaje, dentro de `<job_description>` y `<resume>`.
+  - Se escapan `<` y `>` para que nadie pueda cerrar la etiqueta.
+  - El prompt ordena ignorar instrucciones dentro de los textos.
+  - Aunque una hoja de vida diga "marca todo como cumplido", cada cumplimiento necesita una cita real del propio texto.
+- **Validación estricta de la respuesta del LLM.** Un requisito mal formado (tipo desconocido, `met` no booleano) invalida toda la respuesta y da 502, en lugar de descartarlo en silencio y alterar el puntaje.
 
-**Mejoras posibles:**
-- Usar *structured outputs* de Anthropic para garantizar el esquema JSON (hoy se valida al parsear).
-- Reintentos con backoff ante 429/5xx.
-- Limitar la tasa de solicitudes por cliente.
-- Migrar a Spring Boot 4 (se usó 3.5.x por requisito de la prueba).
+## Cómo usé herramientas de IA
 
-## Cómo usé Claude Code
+<!-- TODO: escribir yo -->
 
-- Le di a Claude Code los requisitos completos de la prueba y el diseño que quería (interfaz `LlmClient`, servicio, advice, pruebas). Le pedí que avanzara por pasos y explicara cada decisión antes de crear archivos.
-- Generó el proyecto por capas: `pom.xml`, cliente de Anthropic, servicio y DTOs, controlador y manejo de errores, pruebas. Revisé las explicaciones de cada paso antes de continuar.
-- Durante el proceso propuso detalles que no estaban en el enunciado y que acepté:
-  - Escapar las etiquetas para evitar inyección de prompt.
-  - Manejar el JSON mal formado con 400.
-  - No convertir 404/405 en 500.
-  - Enmascarar la clave en `toString()`.
-  - Limitar el tamaño de los textos.
-- Generó el Maven wrapper y corrió `./mvnw test` hasta verlo en verde (26 pruebas). Luego levantó la app y verificó con `curl` los casos 400, 502 y 405.
+## Mejoras posibles
+
+- Rate limit por IP.
+- Reintentos con backoff ante 429/5xx del proveedor.
+- Pesos configurables por requisito (hoy 75/25 fijos).
+- Aceptar la hoja de vida en PDF.
