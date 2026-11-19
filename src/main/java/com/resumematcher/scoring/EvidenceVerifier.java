@@ -33,9 +33,20 @@ public class EvidenceVerifier {
             return new VerifiedRequirement(requirement.requirement(), requirement.type(), false, null, null);
         }
 
-        boolean found = normalizedResume.contains(quote);
+        boolean found = containsWholeWords(normalizedResume, quote);
         return new VerifiedRequirement(
                 requirement.requirement(), requirement.type(), requirement.met() && found, evidence, found);
+    }
+
+    /**
+     * Busca la cita como palabras completas: "Java" no debe validarse contra "JavaScript".
+     * Se usan lookarounds con letras y dígitos Unicode en lugar de {@code \b}, porque
+     * {@code \b} de Java no trata las letras con tilde como parte de una palabra.
+     */
+    static boolean containsWholeWords(String normalizedText, String normalizedQuote) {
+        Pattern pattern = Pattern.compile(
+                "(?<![\\p{L}\\p{N}])" + Pattern.quote(normalizedQuote) + "(?![\\p{L}\\p{N}])");
+        return pattern.matcher(normalizedText).find();
     }
 
     /**

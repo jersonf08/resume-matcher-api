@@ -109,6 +109,46 @@ class EvidenceVerifierTest {
     }
 
     @Test
+    void rechazaCitaQueSoloApareceDentroDeOtraPalabra() {
+        VerifiedRequirement result = verifier.verify(
+                List.of(new ExtractedRequirement("Java", RequirementType.MUST, true, "Java")),
+                "3 años con JavaScript y TypeScript.").get(0);
+
+        assertThat(result.met()).isFalse();
+        assertThat(result.verified()).isFalse();
+    }
+
+    @Test
+    void aceptaCitaDePalabraCompletaSeguidaDeOtroToken() {
+        VerifiedRequirement result = verifyOne(true, "Java");
+
+        // En la hoja de vida aparece "Java 17".
+        assertThat(result.met()).isTrue();
+        assertThat(result.verified()).isTrue();
+    }
+
+    @Test
+    void aceptaCitaConTildes() {
+        VerifiedRequirement result = verifier.verify(
+                List.of(new ExtractedRequirement("Gestión de equipos", RequirementType.MUST, true, "gestión")),
+                "Experiencia en gestión de un equipo de 10 personas.").get(0);
+
+        assertThat(result.met()).isTrue();
+        assertThat(result.verified()).isTrue();
+    }
+
+    @Test
+    void rechazaCitaConTildesQueEsParteDeOtraPalabra() {
+        // La cita aparece dentro de una palabra más larga ("Autogestiónado").
+        VerifiedRequirement result = verifier.verify(
+                List.of(new ExtractedRequirement("Gestión", RequirementType.MUST, true, "gestión")),
+                "Autogestiónado y proactivo.").get(0);
+
+        assertThat(result.met()).isFalse();
+        assertThat(result.verified()).isFalse();
+    }
+
+    @Test
     void conservaRequisitoYTipo() {
         List<VerifiedRequirement> results = verifier.verify(List.of(
                 new ExtractedRequirement("Java", RequirementType.MUST, true, "Java 17"),
