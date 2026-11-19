@@ -140,6 +140,11 @@ Además lo probé a mano con Postman y una clave real (ver [`postman/`](postman/
   - Pedí que el código garantice las 2 o 3 frases de la explicación, en lugar de confiar solo en el prompt.
 - **Cómo validé:** corrí las pruebas automatizadas y probé con Postman y una clave real: un candidato que encaja (88), uno que no encaja (0) y los errores 400. Comprobé a mano que el 88 coincide con la fórmula.
 
+## Limitaciones conocidas
+
+- La explicación la redacta el LLM antes de que el código verifique las citas. Si una cita se descarta por inventada, el puntaje baja, pero la explicación puede seguir mencionando ese requisito como cumplido.
+- El modelo decide qué requisitos son obligatorios (MUST) o deseables (NICE), así que esa clasificación sigue influyendo en el puntaje. Con `?detail=true` se puede auditar.
+
 ## Mejoras posibles
 
 - Rate limit por IP.
