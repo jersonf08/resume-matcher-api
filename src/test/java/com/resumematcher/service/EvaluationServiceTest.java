@@ -5,11 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.resumematcher.api.EvaluationRequest;
-import com.resumematcher.api.EvaluationResponse;
 import com.resumematcher.llm.LlmException;
+import com.resumematcher.scoring.EvidenceVerifier;
+import com.resumematcher.scoring.ExtractedRequirement;
+import com.resumematcher.scoring.RequirementType;
+import com.resumematcher.scoring.ScoreCalculator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class EvaluationServiceTest {
@@ -18,55 +20,49 @@ class EvaluationServiceTest {
             (system, user) -> {
                 throw new UnsupportedOperationException("No se usa en estas pruebas");
             },
-            new ObjectMapper());
+            new ObjectMapper(),
+            new EvidenceVerifier(),
+            new ScoreCalculator());
 
     @Test
     void parseaJsonLimpio() {
-        EvaluationResponse response = service.parse("""
-                {"score": 72, "explanation": "Buen encaje técnico. Falta experiencia en liderazgo."}""");
+        EvaluationService.LlmAssessment assessment = service.parse("""
+                {"requirements": [
+                  {"requirement": "Java", "type": "MUST", "met": true, "evidence": "5 años con Java"},
+                  {"requirement": "Liderazgo", "type": "nice", "met": false, "evidence": null}
+                ], "explanation": "Buen encaje técnico. Falta experiencia en liderazgo."}""");
 
-        assertThat(response.score()).isEqualTo(72);
-        assertThat(response.explanation()).isEqualTo("Buen encaje técnico. Falta experiencia en liderazgo.");
+        assertThat(assessment.requirements()).containsExactly(
+                new ExtractedRequirement("Java", RequirementType.MUST, true, "5 años con Java"),
+                new ExtractedRequirement("Liderazgo", RequirementType.NICE, false, null));
+        assertThat(assessment.explanation()).isEqualTo("Buen encaje técnico. Falta experiencia en liderazgo.");
     }
 
     @Test
     void toleraBloqueDeCodigoYTextoAlrededor() {
-        EvaluationResponse response = service.parse("""
+        EvaluationService.LlmAssessment assessment = service.parse("""
                 Aquí está la evaluación:
                 ```json
-                {"score": 40, "explanation": "  Encaje parcial.  "}
+                {"requirements": [{"requirement": "Java", "type": "MUST", "met": false}], "explanation": "  Encaje parcial.  "}
                 ```""");
 
-        assertThat(response.score()).isEqualTo(40);
-        assertThat(response.explanation()).isEqualTo("Encaje parcial.");
-    }
-
-    @ParameterizedTest
-    @CsvSource({
-            "150,   100",
-            "100,   100",
-            "-20,   0",
-            "0,     0",
-            "72.6,  73",
-            "72.4,  72"
-    })
-    void acotaElScoreEntre0Y100(String rawScore, int expected) {
-        EvaluationResponse response = service.parse(
-                "{\"score\": " + rawScore + ", \"explanation\": \"Texto.\"}");
-
-        assertThat(response.score()).isEqualTo(expected);
+        assertThat(assessment.requirements()).hasSize(1);
+        assertThat(assessment.requirements().get(0).evidence()).isNull();
+        assertThat(assessment.explanation()).isEqualTo("Encaje parcial.");
     }
 
     @ParameterizedTest
     @ValueSource(strings = {
             "Lo siento, no puedo ayudar con eso.",
-            "{\"score\": 80, \"explanation\": ",
-            "{\"explanation\": \"Sin puntaje.\"}",
-            "{\"score\": \"alto\", \"explanation\": \"Puntaje no numérico.\"}",
-            "{\"score\": null, \"explanation\": \"Puntaje nulo.\"}",
-            "{\"score\": 80}",
-            "{\"score\": 80, \"explanation\": \"   \"}",
-            "{\"score\": 80, \"explanation\": 123}",
+            "{\"requirements\": [], \"explanation\": ",
+            "{\"explanation\": \"Sin requisitos.\"}",
+            "{\"requirements\": \"Java\", \"explanation\": \"No es lista.\"}",
+            "{\"requirements\": []}",
+            "{\"requirements\": [], \"explanation\": \"   \"}",
+            "{\"requirements\": [{\"type\": \"MUST\", \"met\": true}], \"explanation\": \"Sin texto.\"}",
+            "{\"requirements\": [{\"requirement\": \"Java\", \"type\": \"CRITICAL\", \"met\": true}], \"explanation\": \"Tipo raro.\"}",
+            "{\"requirements\": [{\"requirement\": \"Java\", \"type\": \"MUST\", \"met\": \"si\"}], \"explanation\": \"met no booleano.\"}",
+            "{\"requirements\": [{\"requirement\": \"Java\", \"type\": \"MUST\", \"met\": true, \"evidence\": 5}], \"explanation\": \"Evidencia numérica.\"}",
             ""
     })
     void rechazaRespuestasInvalidas(String raw) {

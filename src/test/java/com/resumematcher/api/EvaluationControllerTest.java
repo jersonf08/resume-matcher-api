@@ -14,6 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.resumematcher.llm.LlmClient;
 import com.resumematcher.llm.LlmException;
+import com.resumematcher.scoring.EvidenceVerifier;
+import com.resumematcher.scoring.ScoreCalculator;
 import com.resumematcher.service.EvaluationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,7 +26,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(EvaluationController.class)
-@Import(EvaluationService.class)
+@Import({EvaluationService.class, EvidenceVerifier.class, ScoreCalculator.class})
 class EvaluationControllerTest {
 
     private static final String URL = "/api/evaluations";
@@ -38,14 +40,18 @@ class EvaluationControllerTest {
     @Test
     void devuelveScoreYExplicacionCuandoElLlmRespondeBien() throws Exception {
         when(llmClient.complete(anyString(), anyString())).thenReturn("""
-                {"score": 85, "explanation": "El candidato cumple los requisitos principales. Le falta experiencia en Kubernetes."}""");
+                {"requirements": [
+                  {"requirement": "Java", "type": "MUST", "met": true, "evidence": "5 años con Java"},
+                  {"requirement": "Spring Boot", "type": "MUST", "met": true, "evidence": "Spring Boot"},
+                  {"requirement": "Kubernetes", "type": "NICE", "met": false, "evidence": null}
+                ], "explanation": "El candidato cumple los requisitos principales. Le falta experiencia en Kubernetes."}""");
 
         mockMvc.perform(post(URL)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"jobDescription": "Desarrollador Java con Spring Boot", "resume": "5 años con Java y Spring Boot"}"""))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.score").value(85))
+                .andExpect(jsonPath("$.score").value(75))
                 .andExpect(jsonPath("$.explanation").value(containsString("requisitos principales")));
 
         verify(llmClient).complete(anyString(), contains("<resume>\n5 años con Java y Spring Boot\n</resume>"));

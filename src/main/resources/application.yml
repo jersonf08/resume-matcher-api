@@ -13,6 +13,7 @@ anthropic:
   # "disabled": la extracción no necesita razonamiento y así no consume max-tokens.
   # Déjalo vacío (ANTHROPIC_THINKING=) para modelos que no lo admiten, como Opus 5.5.
   thinking: ${ANTHROPIC_THINKING:disabled}
-  max-tokens: 16000
+  # Suficiente para ~12 requisitos con su cita y la explicación.
+  max-tokens: 1500
   connect-timeout: 10s
   read-timeout: 90s
