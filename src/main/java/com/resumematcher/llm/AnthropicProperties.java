@@ -10,6 +10,7 @@ public record AnthropicProperties(
         String apiVersion,
         String model,
         String effort,
+        String thinking,
         int maxTokens,
         Duration connectTimeout,
         Duration readTimeout) {
@@ -17,8 +18,12 @@ public record AnthropicProperties(
     /** Evita que la clave aparezca si alguien imprime este objeto en un log. */
     @Override
     public String toString() {
-        return "AnthropicProperties[baseUrl=%s, model=%s, effort=%s, maxTokens=%d, apiKey=%s]"
-                .formatted(baseUrl, model, effort, maxTokens, hasApiKey() ? "****" : "<vacía>");
+        return "AnthropicProperties[baseUrl=%s, model=%s, effort=%s, thinking=%s, maxTokens=%d, apiKey=%s]"
+                .formatted(baseUrl, model, effort, thinking, maxTokens, hasApiKey() ? "****" : "<vacía>");
+    }
+
+    public boolean hasThinking() {
+        return thinking != null && !thinking.isBlank();
     }
 
     public boolean hasApiKey() {

@@ -7,8 +7,12 @@ anthropic:
   api-key: ${ANTHROPIC_API_KEY:}
   base-url: https://api.anthropic.com
   api-version: "2026-10-21"
-  model: claude-opus-5-5
-  effort: medium
+  # Haiku por costo y latencia; se cambia sin recompilar con ANTHROPIC_MODEL.
+  model: ${ANTHROPIC_MODEL:claude-haiku-5-5}
+  effort: low
+  # "disabled": la extracción no necesita razonamiento y así no consume max-tokens.
+  # Déjalo vacío (ANTHROPIC_THINKING=) para modelos que no lo admiten, como Opus 5.5.
+  thinking: ${ANTHROPIC_THINKING:disabled}
   max-tokens: 16000
   connect-timeout: 10s
   read-timeout: 90s

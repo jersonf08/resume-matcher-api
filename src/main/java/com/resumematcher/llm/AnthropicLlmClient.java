@@ -2,6 +2,7 @@ package com.resumematcher.llm;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.net.http.HttpClient;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -22,9 +23,6 @@ public class AnthropicLlmClient implements LlmClient {
 
     private static final Logger log = LoggerFactory.getLogger(AnthropicLlmClient.class);
 
-    /** Si el modelo principal rechaza la solicitud, el servidor reintenta con un modelo de respaldo. */
-    private static final String FALLBACK_BETA = "server-side-fallback-2026-07-01";
-
     private final AnthropicProperties properties;
     private final RestClient restClient;
 
@@ -41,7 +39,6 @@ public class AnthropicLlmClient implements LlmClient {
                 .baseUrl(properties.baseUrl())
                 .requestFactory(requestFactory)
                 .defaultHeader("anthropic-version", properties.apiVersion())
-                .defaultHeader("anthropic-beta", FALLBACK_BETA)
                 .build();
     }
 
@@ -51,13 +48,15 @@ public class AnthropicLlmClient implements LlmClient {
             throw new LlmException("ANTHROPIC_API_KEY no está configurada");
         }
 
-        Map<String, Object> body = Map.of(
-                "model", properties.model(),
-                "max_tokens", properties.maxTokens(),
-                "system", systemPrompt,
-                "messages", List.of(Map.of("role", "user", "content", userPrompt)),
-                "output_config", Map.of("effort", properties.effort()),
-                "fallbacks", "default");
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", properties.model());
+        body.put("max_tokens", properties.maxTokens());
+        body.put("system", systemPrompt);
+        body.put("messages", List.of(Map.of("role", "user", "content", userPrompt)));
+        body.put("output_config", Map.of("effort", properties.effort()));
+        if (properties.hasThinking()) {
+            body.put("thinking", Map.of("type", properties.thinking()));
+        }
 
         JsonNode response;
         try {
