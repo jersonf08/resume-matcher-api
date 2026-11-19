@@ -75,19 +75,19 @@ class EvidenceVerifierTest {
     }
 
     @Test
-    void cumplidoSinCitaNoCuentaYSeMarcaNoVerificado() {
+    void cumplidoSinCitaNoCuentaYNoSeVerifica() {
         VerifiedRequirement result = verifyOne(true, null);
 
         assertThat(result.met()).isFalse();
-        assertThat(result.verified()).isFalse();
+        assertThat(result.verified()).isNull();
     }
 
     @Test
-    void noCumplidoSinCitaEsUnaRespuestaHonesta() {
+    void noCumplidoSinCitaNoSeVerifica() {
         VerifiedRequirement result = verifyOne(false, null);
 
         assertThat(result.met()).isFalse();
-        assertThat(result.verified()).isTrue();
+        assertThat(result.verified()).isNull();
         assertThat(result.evidence()).isNull();
     }
 
@@ -96,7 +96,7 @@ class EvidenceVerifierTest {
         VerifiedRequirement result = verifyOne(true, "   ");
 
         assertThat(result.met()).isFalse();
-        assertThat(result.verified()).isFalse();
+        assertThat(result.verified()).isNull();
         assertThat(result.evidence()).isNull();
     }
 

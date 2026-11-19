@@ -29,9 +29,8 @@ public class EvidenceVerifier {
         String quote = evidence == null ? "" : normalize(SURROUNDING_QUOTES.matcher(evidence.strip()).replaceAll(""));
 
         if (quote.isEmpty()) {
-            // Sin cita no hay cumplimiento. Si el modelo decía que sí se cumplía, era una afirmación sin respaldo.
-            return new VerifiedRequirement(
-                    requirement.requirement(), requirement.type(), false, null, !requirement.met());
+            // Sin cita no hay cumplimiento ni nada que verificar.
+            return new VerifiedRequirement(requirement.requirement(), requirement.type(), false, null, null);
         }
 
         boolean found = normalizedResume.contains(quote);

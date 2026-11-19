@@ -76,10 +76,10 @@ public class EvaluationService {
         LlmAssessment assessment = parse(rawResponse);
 
         List<VerifiedRequirement> verified = evidenceVerifier.verify(assessment.requirements(), request.resume());
-        long rejected = verified.stream().filter(r -> !r.verified()).count();
+        long rejected = verified.stream().filter(r -> Boolean.FALSE.equals(r.verified())).count();
         if (rejected > 0) {
             // Solo el conteo: el contenido de la hoja de vida no va a los logs.
-            log.warn("Se descartaron {} de {} afirmaciones del modelo sin evidencia real",
+            log.warn("Se descartaron {} de {} citas del modelo que no existen en la hoja de vida",
                     rejected, verified.size());
         }
 

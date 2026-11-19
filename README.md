@@ -64,7 +64,7 @@ Con `?detail=true` se agrega el desglose que explica el puntaje (**ilustrativo**
   "requirements": [
     {"requirement": "3+ años con Java y Spring Boot", "type": "MUST", "met": true,
      "evidence": "5 años desarrollando APIs REST con Java 17 y Spring Boot", "verified": true},
-    {"requirement": "AWS", "type": "NICE", "met": false, "evidence": null, "verified": true}
+    {"requirement": "AWS", "type": "NICE", "met": false, "evidence": null, "verified": null}
   ]
 }
 ```
@@ -86,7 +86,7 @@ La carpeta [`postman/`](postman/resume-matcher.postman_collection.json) tiene un
   - **Reproducible:** los mismos requisitos dan siempre el mismo número.
   - **Auditable:** `?detail=true` muestra de dónde sale cada punto.
   - **Comprobable sin LLM:** la fórmula tiene pruebas unitarias propias.
-- **Verificación de citas contra alucinaciones.** `EvidenceVerifier` comprueba que cada cita exista en la hoja de vida, sin distinguir espacios, saltos de línea ni mayúsculas. Si el modelo cita algo que no está, o da un requisito por cumplido sin cita, ese requisito cuenta como no cumplido y queda marcado `verified: false`.
+- **Verificación de citas contra alucinaciones.** `EvidenceVerifier` comprueba que cada cita exista en la hoja de vida, sin distinguir espacios, saltos de línea ni mayúsculas. Si el modelo cita algo que no está, ese requisito cuenta como no cumplido y queda marcado `verified: false`. Sin cita no hay cumplimiento posible y `verified` es `null` (no hay nada que verificar).
 - **Contrato mínimo por defecto.** La respuesta es exactamente `{score, explanation}`, como pide el enunciado. El desglose es opcional (`?detail=true`, `@JsonInclude(NON_NULL)`).
 - **`LlmClient` como interfaz.** `AnthropicLlmClient` es una implementación. Cambiar de proveedor no toca el servicio, y en las pruebas el modelo se simula. No se usa SDK: `RestClient` de Spring contra `POST /v1/messages`, con timeouts configurables.
 - **Claude Haiku 5.5 por costo y latencia.** Extraer y citar es una tarea acotada, no necesita el modelo más grande. Va con `effort: low`, razonamiento desactivado (no consume `max_tokens`) y `max_tokens: 1500`. El modelo se cambia con `ANTHROPIC_MODEL`.

@@ -79,7 +79,7 @@ class EvaluationControllerTest {
                 .andExpect(jsonPath("$.requirements[2].met").value(false))
                 // evidence nula se muestra explícitamente dentro del detalle.
                 .andExpect(jsonPath("$.requirements[2].evidence").value(nullValue()))
-                .andExpect(jsonPath("$.requirements[2].verified").value(true));
+                .andExpect(jsonPath("$.requirements[2].verified").value(nullValue()));
     }
 
     @Test

@@ -74,7 +74,8 @@ class ScoreCalculatorTest {
         List<VerifiedRequirement> list = new ArrayList<>();
         for (int i = 0; i < total; i++) {
             boolean isMet = i < met;
-            list.add(new VerifiedRequirement(type + " " + i, type, isMet, isMet ? "cita" : null, true));
+            list.add(new VerifiedRequirement(
+                    type + " " + i, type, isMet, isMet ? "cita" : null, isMet ? Boolean.TRUE : null));
         }
         return list;
     }
