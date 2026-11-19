@@ -1,7 +1,9 @@
 package com.resumematcher.api;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.verify;
@@ -36,6 +38,86 @@ class EvaluationControllerTest {
 
     @MockitoBean
     private LlmClient llmClient;
+
+    private static final String REQUEST_BODY = """
+            {"jobDescription": "Desarrollador Java con Spring Boot. Deseable Kubernetes.",
+             "resume": "5 años con Java y Spring Boot en proyectos bancarios."}""";
+
+    private static final String LLM_RESPONSE = """
+            {"requirements": [
+              {"requirement": "Java", "type": "MUST", "met": true, "evidence": "5 años con Java"},
+              {"requirement": "Spring Boot", "type": "MUST", "met": true, "evidence": "Spring Boot"},
+              {"requirement": "Kubernetes", "type": "NICE", "met": false, "evidence": null}
+            ], "explanation": "Cumple los requisitos obligatorios. No muestra experiencia con Kubernetes."}""";
+
+    @Test
+    void porDefectoDevuelveSoloScoreYExplanation() throws Exception {
+        when(llmClient.complete(anyString(), anyString())).thenReturn(LLM_RESPONSE);
+
+        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(REQUEST_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.*", hasSize(2)))
+                .andExpect(jsonPath("$.score").value(75))
+                .andExpect(jsonPath("$.explanation").exists())
+                .andExpect(jsonPath("$.requirements").doesNotExist());
+    }
+
+    @Test
+    void conDetailTrueIncluyeLosRequisitosVerificados() throws Exception {
+        when(llmClient.complete(anyString(), anyString())).thenReturn(LLM_RESPONSE);
+
+        mockMvc.perform(post(URL + "?detail=true").contentType(MediaType.APPLICATION_JSON).content(REQUEST_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.score").value(75))
+                .andExpect(jsonPath("$.requirements", hasSize(3)))
+                .andExpect(jsonPath("$.requirements[0].requirement").value("Java"))
+                .andExpect(jsonPath("$.requirements[0].type").value("MUST"))
+                .andExpect(jsonPath("$.requirements[0].met").value(true))
+                .andExpect(jsonPath("$.requirements[0].evidence").value("5 años con Java"))
+                .andExpect(jsonPath("$.requirements[0].verified").value(true))
+                .andExpect(jsonPath("$.requirements[2].type").value("NICE"))
+                .andExpect(jsonPath("$.requirements[2].met").value(false))
+                // evidence nula se muestra explícitamente dentro del detalle.
+                .andExpect(jsonPath("$.requirements[2].evidence").value(nullValue()))
+                .andExpect(jsonPath("$.requirements[2].verified").value(true));
+    }
+
+    @Test
+    void unaCitaInventadaPorElLlmBajaElPuntaje() throws Exception {
+        // El modelo afirma que ambos obligatorios se cumplen, pero la cita de Kubernetes no está en la hoja de vida.
+        when(llmClient.complete(anyString(), anyString())).thenReturn("""
+                {"requirements": [
+                  {"requirement": "Java", "type": "MUST", "met": true, "evidence": "5 años con Java"},
+                  {"requirement": "Kubernetes", "type": "MUST", "met": true, "evidence": "3 años administrando Kubernetes"}
+                ], "explanation": "Cumple todos los requisitos."}""");
+
+        mockMvc.perform(post(URL + "?detail=true").contentType(MediaType.APPLICATION_JSON).content(REQUEST_BODY))
+                .andExpect(status().isOk())
+                // Sin verificación serían 100; con la cita rechazada queda 1 de 2 obligatorios.
+                .andExpect(jsonPath("$.score").value(50))
+                .andExpect(jsonPath("$.requirements[1].met").value(false))
+                .andExpect(jsonPath("$.requirements[1].verified").value(false))
+                .andExpect(jsonPath("$.requirements[1].evidence").value("3 años administrando Kubernetes"));
+    }
+
+    @Test
+    void devuelve400CuandoDetailNoEsBooleano() throws Exception {
+        mockMvc.perform(post(URL + "?detail=abc").contentType(MediaType.APPLICATION_JSON).content(REQUEST_BODY))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(containsString("detail")));
+
+        verifyNoInteractions(llmClient);
+    }
+
+    @Test
+    void devuelve502CuandoElLlmNoExtraeRequisitos() throws Exception {
+        when(llmClient.complete(anyString(), anyString())).thenReturn("""
+                {"requirements": [], "explanation": "No encontré requisitos."}""");
+
+        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(REQUEST_BODY))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.error").value(GlobalExceptionHandler.LLM_UNAVAILABLE_MESSAGE));
+    }
 
     @Test
     void devuelveScoreYExplicacionCuandoElLlmRespondeBien() throws Exception {
