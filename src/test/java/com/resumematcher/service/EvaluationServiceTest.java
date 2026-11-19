@@ -43,12 +43,29 @@ class EvaluationServiceTest {
         EvaluationService.LlmAssessment assessment = service.parse("""
                 Aquí está la evaluación:
                 ```json
-                {"requirements": [{"requirement": "Java", "type": "MUST", "met": false}], "explanation": "  Encaje parcial.  "}
+                {"requirements": [{"requirement": "Java", "type": "MUST", "met": false}], "explanation": "  Encaje parcial. Falta Java.  "}
                 ```""");
 
         assertThat(assessment.requirements()).hasSize(1);
         assertThat(assessment.requirements().get(0).evidence()).isNull();
-        assertThat(assessment.explanation()).isEqualTo("Encaje parcial.");
+        assertThat(assessment.explanation()).isEqualTo("Encaje parcial. Falta Java.");
+    }
+
+    @Test
+    void recortaLaExplicacionATresFrases() {
+        EvaluationService.LlmAssessment assessment = service.parse("""
+                {"requirements": [{"requirement": "Java", "type": "MUST", "met": false}],
+                 "explanation": "Uno. Dos. Tres. Cuatro."}""");
+
+        assertThat(assessment.explanation()).isEqualTo("Uno. Dos. Tres.");
+    }
+
+    @Test
+    void rechazaExplicacionDeUnaSolaFrase() {
+        assertThatThrownBy(() -> service.parse("""
+                {"requirements": [{"requirement": "Java", "type": "MUST", "met": false}],
+                 "explanation": "Solo una frase."}"""))
+                .isInstanceOf(LlmException.class);
     }
 
     @ParameterizedTest

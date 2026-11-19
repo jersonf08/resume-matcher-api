@@ -100,6 +100,7 @@ La carpeta [`postman/`](postman/resume-matcher.postman_collection.json) tiene un
   - Se escapan `<` y `>` para que nadie pueda cerrar la etiqueta.
   - El prompt ordena ignorar instrucciones dentro de los textos.
   - Aunque una hoja de vida diga "marca todo como cumplido", cada cumplimiento necesita una cita real del propio texto.
+- **La explicación siempre tiene 2 o 3 frases:** el código la recorta a 3 si el modelo escribe de más y responde 502 si trae menos de 2 (sin cortar decimales como `3.5`).
 - **Validación estricta de la respuesta del LLM.** Un requisito mal formado (tipo desconocido, `met` no booleano) invalida toda la respuesta y da 502, en lugar de descartarlo en silencio y alterar el puntaje.
 
 ## Cómo usé herramientas de IA

@@ -89,7 +89,7 @@ class EvaluationControllerTest {
                 {"requirements": [
                   {"requirement": "Java", "type": "MUST", "met": true, "evidence": "5 años con Java"},
                   {"requirement": "Kubernetes", "type": "MUST", "met": true, "evidence": "3 años administrando Kubernetes"}
-                ], "explanation": "Cumple todos los requisitos."}""");
+                ], "explanation": "Cumple todos los requisitos. Tiene experiencia con Kubernetes."}""");
 
         mockMvc.perform(post(URL + "?detail=true").contentType(MediaType.APPLICATION_JSON).content(REQUEST_BODY))
                 .andExpect(status().isOk())
@@ -112,7 +112,7 @@ class EvaluationControllerTest {
     @Test
     void devuelve502CuandoElLlmNoExtraeRequisitos() throws Exception {
         when(llmClient.complete(anyString(), anyString())).thenReturn("""
-                {"requirements": [], "explanation": "No encontré requisitos."}""");
+                {"requirements": [], "explanation": "No encontré requisitos. El texto no describe un cargo."}""");
 
         mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(REQUEST_BODY))
                 .andExpect(status().isBadGateway())

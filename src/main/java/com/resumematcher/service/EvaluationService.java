@@ -147,7 +147,7 @@ public class EvaluationService {
             throw new LlmException("El campo 'explanation' falta o está vacío");
         }
 
-        return new LlmAssessment(List.copyOf(requirements), explanationNode.asText().strip());
+        return new LlmAssessment(List.copyOf(requirements), ExplanationSentences.enforce(explanationNode.asText()));
     }
 
     private static ExtractedRequirement parseRequirement(JsonNode item) {
