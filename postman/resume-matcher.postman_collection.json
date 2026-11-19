@@ -1,0 +1,181 @@
+{
+  "info": {
+    "name": "resume-matcher-api",
+    "description": "Casos de prueba de POST /api/evaluations. Arranca la API con ANTHROPIC_API_KEY configurada y ajusta la variable baseUrl si no corre en el puerto 8080.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Caso exitoso",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jobDescription\": \"Desarrollador backend Java. Requisitos: 3+ años con Java y Spring Boot, experiencia construyendo APIs REST y bases de datos MySQL. Deseable: Docker y AWS.\",\n  \"resume\": \"Ingeniero de sistemas. 5 años desarrollando APIs REST con Java 17 y Spring Boot. Bases de datos MySQL y PostgreSQL. Despliegues con Docker.\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/evaluations",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "evaluations"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Solo score y explanation', () => pm.expect(Object.keys(body)).to.have.members(['score', 'explanation']));",
+              "pm.test('score entre 0 y 100', () => pm.expect(body.score).to.be.within(0, 100));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Caso exitoso con detalle (?detail=true)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jobDescription\": \"Desarrollador backend Java. Requisitos: 3+ años con Java y Spring Boot, experiencia construyendo APIs REST y bases de datos MySQL. Deseable: Docker y AWS.\",\n  \"resume\": \"Ingeniero de sistemas. 5 años desarrollando APIs REST con Java 17 y Spring Boot. Bases de datos MySQL y PostgreSQL. Despliegues con Docker.\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/evaluations?detail=true",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "evaluations"],
+          "query": [
+            { "key": "detail", "value": "true" }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Incluye requirements', () => pm.expect(body.requirements).to.be.an('array').that.is.not.empty);",
+              "pm.test('Cada requisito tiene sus campos', () => body.requirements.forEach(r => pm.expect(r).to.have.all.keys('requirement', 'type', 'met', 'evidence', 'verified')));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Falta resume (400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jobDescription\": \"Desarrollador backend Java con Spring Boot.\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/evaluations",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "evaluations"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+              "pm.test('Mensaje sobre resume', () => pm.expect(pm.response.json().error).to.include('resume'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. jobDescription vacío (400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jobDescription\": \"   \",\n  \"resume\": \"5 años desarrollando APIs REST con Java y Spring Boot.\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/evaluations",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "evaluations"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+              "pm.test('Mensaje sobre jobDescription', () => pm.expect(pm.response.json().error).to.include('jobDescription'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Hoja de vida que no encaja",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jobDescription\": \"Desarrollador backend Java. Requisitos: 3+ años con Java y Spring Boot, experiencia construyendo APIs REST y bases de datos MySQL. Deseable: Docker y AWS.\",\n  \"resume\": \"Chef profesional con 8 años de experiencia en cocina mediterránea. Manejo de inventarios, gestión de un equipo de 10 personas y diseño de menús de temporada.\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/evaluations?detail=true",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "evaluations"],
+          "query": [
+            { "key": "detail", "value": "true" }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('score entre 0 y 100', () => pm.expect(pm.response.json().score).to.be.within(0, 100));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
