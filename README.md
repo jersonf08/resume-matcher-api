@@ -24,7 +24,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 
 La API queda en `http://localhost:8080`. Opcional: `ANTHROPIC_MODEL` cambia el modelo (por defecto `claude-haiku-5-5`).
 
-**Pruebas** (no necesitan clave ni red; el LLM se simula):
+**Pruebas automatizadas** (no necesitan clave ni red; el LLM se simula para que sean rápidas, gratis y repetibles; la integración con Anthropic se probó aparte con una clave real, ver [Pruebas](#pruebas)):
 
 ```bash
 ./mvnw test        # Windows: .\mvnw.cmd test
@@ -117,28 +117,49 @@ La carpeta [`postman/`](postman/resume-matcher.postman_collection.json) tiene un
 
 ## Pruebas
 
-57 pruebas automatizadas (`./mvnw test`), todas con el LLM simulado:
+Hay dos niveles de pruebas.
+
+### 1. Pruebas automatizadas (con el LLM simulado)
+
+61 pruebas (`./mvnw test`). En ellas el cliente del LLM se reemplaza por un *mock* que devuelve respuestas fijas, así validan la lógica propia (validación, verificación de citas, cálculo del puntaje, manejo de errores) sin costo, sin red y siempre con el mismo resultado:
 
 - `EvaluationControllerTest`: endpoint completo. Caso exitoso, `?detail=true`, campos faltantes o vacíos (400), JSON inválido (400), fallo del LLM (502 sin filtrar detalles) y un LLM que inventa una cita (el puntaje baja).
 - `ScoreCalculatorTest`: la fórmula, con solo obligatorios, solo deseables, mixtos, 0, 100 y lista vacía.
 - `EvidenceVerifierTest`: citas exactas, con diferencias de espacios o mayúsculas, e inventadas.
+  La cita debe coincidir con palabras completas (letras con tilde y ñ incluidas), no como subcadena:
+
+  | Cita | Texto de la hoja de vida | Resultado |
+  |---|---|---|
+  | "Java" | "...JavaScript..." | rechazada |
+  | "Java" | "...Java 17..." | aceptada |
+  | "gestión" | "...en gestión de un equipo..." | aceptada |
+  | "gestión" | "...Autogestiónado..." | rechazada |
 - `EvaluationServiceTest`: interpretación y validación de la respuesta del modelo.
 - `ExplanationSentencesTest`: la regla de 2 o 3 frases, incluidos los números decimales.
 
-Además lo probé a mano con Postman y una clave real (ver [`postman/`](postman/)).
+### 2. Pruebas reales contra Anthropic (manuales)
+
+Con la API corriendo localmente y una `ANTHROPIC_API_KEY` real, ejecuté la colección de [`postman/`](postman/) contra Claude Haiku 5.5:
+
+| Caso | Resultado real |
+|---|---|
+| Candidato que encaja (Java, Spring Boot, REST, MySQL, Docker; sin AWS) | `200`, `score: 88` en ~2,4 s. Las 4 citas, verificadas en la hoja de vida |
+| Mismo caso con `?detail=true` | `200`, 5 requisitos extraídos (3 obligatorios y 2 deseables), igual que en la oferta |
+| Hoja de vida que no encaja (chef) | `200`, `score: 0`, sin ninguna cita inventada |
+| Falta `resume` | `400` en ~10 ms, sin llamar al LLM |
+| `jobDescription` solo con espacios | `400` en ~4 ms, sin llamar al LLM |
+
+En dos llamadas con los mismos textos, la explicación cambió de redacción, pero el puntaje se mantuvo en 88, porque lo calcula el código y no el modelo.
 
 ## Cómo usé herramientas de IA
 
-<!-- Borrador basado en lo que hice; ajústalo a tus palabras antes de entregar. -->
-
-- **Claude (chat)** para entender el enunciado, comparar enfoques y definir el diseño antes de escribir código.
-- **Claude Code** para generar el proyecto, las pruebas y la colección de Postman, a partir de prompts en los que yo definí los requisitos y el diseño.
-- **Lo que revisé y corregí:**
-  - Claude Code agregó el parámetro `fallbacks`, de una función en beta que exige un header adicional. Sin ese header las llamadas reales habrían fallado, y las pruebas simuladas no lo habrían detectado. Lo quité.
-  - Había elegido un modelo grande (Opus). Lo cambié a Haiku porque la tarea es extraer y clasificar, y prioricé costo y latencia.
-  - La idea de que el LLM no genere el puntaje, sino que extraiga requisitos con citas que el código verifica, fue mía. No quería que la nota dependiera de un número que el modelo pudiera inventar.
-  - Pedí que el código garantice las 2 o 3 frases de la explicación, en lugar de confiar solo en el prompt.
-- **Cómo validé:** corrí las pruebas automatizadas y probé con Postman y una clave real: un candidato que encaja (88), uno que no encaja (0) y los errores 400. Comprobé a mano que el 88 coincide con la fórmula.
+- **Claude (chat)** como revisor y para pensar el diseño: entender el enunciado, comparar enfoques y revisar lo que generaba Claude Code antes de aceptarlo.
+- **Claude Code** para generar el código, las pruebas y la colección de Postman a partir de prompts con los requisitos y el diseño.
+- **Lo que se corrigió al revisar:**
+  - Claude Code agregó `fallbacks`, una función en beta que exige un header adicional. Sin él las llamadas reales habrían fallado, y las pruebas simuladas no lo detectaban. Lo quité.
+  - Había elegido Opus; lo cambié a Haiku, porque extraer y clasificar no necesita el modelo más grande y así se reducen costo y latencia.
+- **Decisiones de diseño:** quería algo más sólido que pedirle un número al modelo. Entre las opciones que evalué, elegí que el LLM extraiga requisitos con citas, que el código verifique esas citas y que el puntaje lo calcule Java. También pedí que el código garantice las 2 o 3 frases de la explicación, en lugar de confiar solo en el prompt.
+- **Cómo validé:** corrí las 61 pruebas automatizadas y luego probé contra Anthropic con una clave real (ver [Pruebas](#pruebas)). Comprobé a mano que el 88 coincide con la fórmula.
 
 ## Limitaciones conocidas
 
